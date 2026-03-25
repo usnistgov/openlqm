@@ -68,7 +68,7 @@ in the development of ISO/IEC 29794-12.
 
 If you found a bug and can provide steps to reliably reproduce it, or if you
 have a feature request, please
-[open an issue](https://github.com/usnistgov/openqlm/issues). Other
+[open an issue](https://github.com/usnistgov/openlqm/issues). Other
 questions may be addressed to the
 [project maintainers](mailto:openlqm@list.nist.gov).
 
