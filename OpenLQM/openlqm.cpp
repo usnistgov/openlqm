@@ -569,7 +569,7 @@ void OpenLQM::Core::ImageAttributes::CalcStatisticsFromHistogram() {
 		}
 
 		RunningTotal += valCount;
-		RunningProduct += valCount * valBin;
+		RunningProduct += static_cast<int64_t>(valCount) * valBin;
 		for (int Qcount = 0; Qcount <= 4; ++Qcount) {
 			if (Quartile[Qcount] < 0 && RunningTotal >= QTargets[Qcount]) {
 				Quartile[Qcount] = valBin;
