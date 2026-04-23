@@ -2389,6 +2389,8 @@ namespace OpenLQM {
             normBB.width = newWidth;
             normBB.height = newHeight;
             normBB.resolution = OpenLQM::PixelDensity::ppi500;
+            normBB.bitDepth = img.bitDepth;
+            normBB.bitsPerPixel = img.bitsPerPixel;
 
             normBB.buffer.resize(newSize);
             if (resFactor == 1) {
