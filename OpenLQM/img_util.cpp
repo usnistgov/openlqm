@@ -2385,25 +2385,25 @@ namespace OpenLQM {
             unsigned int newHeight = WordAlign(static_cast<unsigned int>(std::lrint(static_cast<double>(img.height) / static_cast<double>(resFactor))), false);
             unsigned int newSize = newWidth * newHeight;
 
-	        OpenLQM::Fingerprint normBB;
-	        normBB.width = newWidth;
-	        normBB.height = newHeight;
-	        normBB.resolution = OpenLQM::PixelDensity::ppi500;
+                OpenLQM::Fingerprint normBB;
+                normBB.width = newWidth;
+                normBB.height = newHeight;
+                normBB.resolution = OpenLQM::PixelDensity::ppi500;
 
-	        normBB.buffer.resize(newSize);
-	        if (resFactor == 1) {
-	            for (unsigned int y = 0; y < normBB.height; ++y) {
-	                const unsigned char* srcRow =
-	                    img.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(img.width));
-	                unsigned char* dstRow =
-	                    normBB.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(newWidth));
-	                memcpy(dstRow, srcRow, newWidth);
-	            }
-	        } else {
-	            for (unsigned int y = 0; y < normBB.height; ++y) {
-	                for (unsigned int x = 0; x < normBB.width; ++x) {
-	                    normBB.buffer[y * newWidth + x] = img.buffer[(y * resFactor * img.width) + (x * resFactor)];
-	                }
+                normBB.buffer.resize(newSize);
+                if (resFactor == 1) {
+                    for (unsigned int y = 0; y < normBB.height; ++y) {
+                        const unsigned char* srcRow =
+                            img.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(img.width));
+                        unsigned char* dstRow =
+                            normBB.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(newWidth));
+                        memcpy(dstRow, srcRow, newWidth);
+                    }
+                } else {
+                    for (unsigned int y = 0; y < normBB.height; ++y) {
+                        for (unsigned int x = 0; x < normBB.width; ++x) {
+                            normBB.buffer[y * newWidth + x] = img.buffer[(y * resFactor * img.width) + (x * resFactor)];
+                        }
                 }
             }
 
