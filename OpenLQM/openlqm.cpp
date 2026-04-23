@@ -824,9 +824,6 @@ double OpenLQM::Core::CalculateLQMetric12(double predictedMatchScore) {
 	else if (predictedMatchScore >= 2849.35331665492) {
 		return (predictedMatchScore * 0.00003396047) + -0.096765369;
 	}
-	else if (predictedMatchScore >= 2849.35331665492 && predictedMatchScore < 5409.8752849724) {
-		return (predictedMatchScore * 0.00003396047) + -0.096765369;
-	}
 	else {
 		return 0.0;
 	}
