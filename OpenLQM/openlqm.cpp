@@ -230,7 +230,7 @@ namespace OpenLQM {
 		}
 
 		template<class T>
-		void CopyVectorToFeatureMap(const std::vector<T> vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
+		void CopyVectorToFeatureMap(const std::vector<T>& vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
 			featureMap.width = width;
 			featureMap.height = height;
 			featureMap.buffer = vec;
