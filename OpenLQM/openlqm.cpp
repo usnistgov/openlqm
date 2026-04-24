@@ -230,7 +230,7 @@ namespace OpenLQM {
 		}
 
 		template<class T>
-		void CopyVectorToFeatureMap(const std::vector<T> vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
+		void CopyVectorToFeatureMap(const std::vector<T>& vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
 			featureMap.width = width;
 			featureMap.height = height;
 			featureMap.buffer = vec;
@@ -822,9 +822,6 @@ double OpenLQM::Core::CalculateLQMetric12(double predictedMatchScore) {
 		return (predictedMatchScore * 0.00001147078) + 0.024901025;
 	}
 	else if (predictedMatchScore >= 2849.35331665492) {
-		return (predictedMatchScore * 0.00003396047) + -0.096765369;
-	}
-	else if (predictedMatchScore >= 2849.35331665492 && predictedMatchScore < 5409.8752849724) {
 		return (predictedMatchScore * 0.00003396047) + -0.096765369;
 	}
 	else {

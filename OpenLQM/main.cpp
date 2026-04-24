@@ -148,7 +148,7 @@ int main(int argc, char* argV[]) {
 				std::cout << USAGE_TEXT;
 				return 0;
 			}
-			ProcessAll(filePath.c_str(), verbose, printHeaders, ppi);
+			ProcessAll(filePath, verbose, printHeaders, ppi);
 		}
 	} else {
 		std::cout << USAGE_TEXT;
