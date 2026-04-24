@@ -391,6 +391,14 @@ static unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
     // ---- BMP (42 4D) ----
     if (data[0] == 0x42 && data[1] == 0x4D) {
         if (sz < 42) return 0;
+        // The biXPelsPerMeter field only exists in BITMAPINFOHEADER (40 B)
+        // and later headers (V2=52, V3=56, V4=108, V5=124). The legacy
+        // BITMAPCOREHEADER is 12 B and has no DPI fields at all — bytes
+        // 38..41 there belong to pixel data and must not be interpreted
+        // as DPI.
+        uint32_t dibSize = uint32_t(data[14]) | (uint32_t(data[15]) << 8) |
+                           (uint32_t(data[16]) << 16) | (uint32_t(data[17]) << 24);
+        if (dibSize < 40) return 0;
         int32_t xppm = int32_t(data[38]) | (int32_t(data[39]) << 8) |
                        (int32_t(data[40]) << 16) | (int32_t(data[41]) << 24);
         return xppm > 0 ? static_cast<unsigned int>(xppm) : 0;
