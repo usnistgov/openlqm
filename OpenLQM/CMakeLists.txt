@@ -52,9 +52,6 @@ message(STATUS "VCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}")
 find_package(OpenCV ${MINIMUM_OPENCV_VERSION} COMPONENTS ${OPENCV_REQUIRED_COMPONENTS})
 find_package(freeimage REQUIRED)
 
-string(TOUPPER ${CMAKE_BUILD_TYPE} build_type_all_caps)
-set(IMPORTED_LOCATION_CONFIG_VAR "IMPORTED_LOCATION_${build_type_all_caps}")
-
 # Project-specific convenience variables
 set(openlqm_include_dir ${PROJECT_SOURCE_DIR}/include)
 configure_file(
