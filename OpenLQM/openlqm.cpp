@@ -239,6 +239,90 @@ namespace OpenLQM {
 
 OpenLQM::Core::GlobalInitializer globalInit;
 
+static unsigned int ConvertDpiToDotsPerMeter(double dpi)
+{
+	return static_cast<unsigned int>(dpi * 10000.0 / 254.0 + 0.5);
+}
+
+static unsigned int ConvertDpcmToDotsPerMeter(double dpcm)
+{
+	return static_cast<unsigned int>(dpcm * 100.0 + 0.5);
+}
+
+static unsigned int ReadTiffDotsPerMeterX(const std::vector<unsigned char>& data, std::size_t tiffBase, std::size_t tiffEnd)
+{
+	if (tiffEnd > data.size() || tiffBase + 8 > tiffEnd) {
+		return 0;
+	}
+
+	bool le = false;
+	if (data[tiffBase] == 0x49 && data[tiffBase + 1] == 0x49) {
+		le = true;
+	} else if (data[tiffBase] == 0x4D && data[tiffBase + 1] == 0x4D) {
+		le = false;
+	} else {
+		return 0;
+	}
+
+	auto u16 = [&](std::size_t o) -> uint16_t {
+		if (o + 2 > tiffEnd) return 0;
+		return le ? (data[o] | (uint16_t(data[o+1]) << 8))
+				  : ((uint16_t(data[o]) << 8) | data[o+1]);
+	};
+	auto u32 = [&](std::size_t o) -> uint32_t {
+		if (o + 4 > tiffEnd) return 0;
+		return le ? (data[o] | (uint32_t(data[o+1]) << 8) |
+					 (uint32_t(data[o+2]) << 16) | (uint32_t(data[o+3]) << 24))
+				  : ((uint32_t(data[o]) << 24) | (uint32_t(data[o+1]) << 16) |
+					 (uint32_t(data[o+2]) << 8) | data[o+3]);
+	};
+
+	if (u16(tiffBase + 2) != 42) {
+		return 0;
+	}
+
+	uint32_t ifdRelOffset = u32(tiffBase + 4);
+	if (ifdRelOffset > tiffEnd - tiffBase) {
+		return 0;
+	}
+	std::size_t ifdOff = tiffBase + ifdRelOffset;
+	if (ifdOff + 2 > tiffEnd) {
+		return 0;
+	}
+
+	uint16_t nEntries = u16(ifdOff);
+	double xRes = 0.0;
+	uint16_t resUnit = 2;
+	for (uint16_t i = 0; i < nEntries; ++i) {
+		std::size_t e = ifdOff + 2 + i * 12;
+		if (e + 12 > tiffEnd) break;
+		uint16_t tag  = u16(e);
+		uint16_t type = u16(e + 2);
+		uint32_t count = u32(e + 4);
+		uint32_t valueOrOffset = u32(e + 8);
+		if (tag == 282 && type == 5 && count > 0) { // XResolution RATIONAL
+			if (valueOrOffset > tiffEnd - tiffBase) {
+				continue;
+			}
+			std::size_t roff = tiffBase + valueOrOffset;
+			if (roff + 8 > tiffEnd) {
+				continue;
+			}
+			uint32_t num = u32(roff), den = u32(roff + 4);
+			if (den) xRes = double(num) / den;
+		}
+		if (tag == 296 && type == 3 && count > 0) {
+			resUnit = u16(e + 8);
+		}
+	}
+
+	if (xRes > 0.0) {
+		if (resUnit == 2) return ConvertDpiToDotsPerMeter(xRes);
+		if (resUnit == 3) return ConvertDpcmToDotsPerMeter(xRes);
+	}
+	return 0;
+}
+
 static unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
 {
     const std::size_t sz = data.size();
@@ -247,65 +331,41 @@ static unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
     // ---- JPEG (FF D8) ----
     if (data[0] == 0xFF && data[1] == 0xD8) {
         std::size_t pos = 2;
-        while (pos + 4 <= sz) {
+        unsigned int jfifDpm = 0;
+        while (pos < sz) {
             if (data[pos] != 0xFF) break;
-            uint8_t marker = data[pos + 1];
+            while (pos < sz && data[pos] == 0xFF) {
+                ++pos;
+            }
+            if (pos >= sz) break;
+            uint8_t marker = data[pos++];
             if (marker == 0xD9 || marker == 0xDA) break; // EOI / SOS
-            uint16_t segLen = (static_cast<uint16_t>(data[pos + 2]) << 8) | data[pos + 3];
-            if (segLen < 2 || pos + 2 + segLen > sz) break;
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+            if (pos + 2 > sz) break;
+            uint16_t segLen = (static_cast<uint16_t>(data[pos]) << 8) | data[pos + 1];
+            if (segLen < 2 || pos + segLen > sz) break;
+            std::size_t segmentStart = pos + 2;
+            std::size_t segmentEnd = pos + segLen;
 
-            if (marker == 0xE0 && segLen >= 16 &&
-                data[pos+4]=='J' && data[pos+5]=='F' && data[pos+6]=='I' && data[pos+7]=='F') {
-                uint8_t units = data[pos + 11];
-                uint16_t xd = (static_cast<uint16_t>(data[pos + 12]) << 8) | data[pos + 13];
+            if (marker == 0xE0 && segmentStart + 14 <= segmentEnd &&
+                data[segmentStart]=='J' && data[segmentStart+1]=='F' && data[segmentStart+2]=='I' &&
+                data[segmentStart+3]=='F' && data[segmentStart+4]==0) {
+                uint8_t units = data[segmentStart + 7];
+                uint16_t xd = (static_cast<uint16_t>(data[segmentStart + 8]) << 8) | data[segmentStart + 9];
                 if (xd > 0) {
-                    if (units == 1) return static_cast<unsigned int>(
-                        static_cast<unsigned long>(xd) * 10000UL / 254UL); // dpi → dpm
-                    if (units == 2) return static_cast<unsigned int>(xd) * 100U; // dpcm → dpm
+                    if (units == 1) jfifDpm = ConvertDpiToDotsPerMeter(xd);
+                    if (units == 2) jfifDpm = ConvertDpcmToDotsPerMeter(xd);
                 }
             }
-            if (marker == 0xE1 && segLen >= 18 &&
-                data[pos+4]=='E' && data[pos+5]=='x' && data[pos+6]=='i' && data[pos+7]=='f') {
-                std::size_t exifBase = pos + 10; // past "Exif\0\0"
-                if (exifBase + 8 > sz) { pos += 2 + segLen; continue; }
-                bool le = (data[exifBase] == 0x49);
-                auto u16 = [&](std::size_t o) -> uint16_t {
-                    if (o + 2 > sz) return 0;
-                    return le ? (data[o] | (uint16_t(data[o+1]) << 8))
-                              : ((uint16_t(data[o]) << 8) | data[o+1]);
-                };
-                auto u32 = [&](std::size_t o) -> uint32_t {
-                    if (o + 4 > sz) return 0;
-                    return le ? (data[o] | (uint32_t(data[o+1]) << 8) |
-                                 (uint32_t(data[o+2]) << 16) | (uint32_t(data[o+3]) << 24))
-                              : ((uint32_t(data[o]) << 24) | (uint32_t(data[o+1]) << 16) |
-                                 (uint32_t(data[o+2]) << 8) | data[o+3]);
-                };
-                std::size_t ifdOff = exifBase + u32(exifBase + 4);
-                if (ifdOff + 2 > sz) { pos += 2 + segLen; continue; }
-                uint16_t nEntries = u16(ifdOff);
-                double xRes = 0.0; uint16_t resUnit = 2;
-                for (uint16_t i = 0; i < nEntries; ++i) {
-                    std::size_t e = ifdOff + 2 + i * 12;
-                    if (e + 12 > sz) break;
-                    uint16_t tag  = u16(e);
-                    uint16_t type = u16(e + 2);
-                    uint32_t voff = u32(e + 8);
-                    if (tag == 282 && type == 5) { // XResolution RATIONAL
-                        std::size_t roff = exifBase + voff;
-                        uint32_t num = u32(roff), den = u32(roff + 4);
-                        if (den) xRes = double(num) / den;
-                    }
-                    if (tag == 296 && type == 3) resUnit = u16(e + 8);
-                }
-                if (xRes > 0.0) {
-                    if (resUnit == 2) return unsigned(xRes * 10000.0 / 254.0 + 0.5);
-                    if (resUnit == 3) return unsigned(xRes * 100.0 + 0.5);
-                }
+            if (marker == 0xE1 && segmentStart + 14 <= segmentEnd &&
+                data[segmentStart]=='E' && data[segmentStart+1]=='x' && data[segmentStart+2]=='i' &&
+                data[segmentStart+3]=='f' && data[segmentStart+4]==0 && data[segmentStart+5]==0) {
+                unsigned int exifDpm = ReadTiffDotsPerMeterX(data, segmentStart + 6, segmentEnd);
+                if (exifDpm > 0) return exifDpm;
             }
-            pos += 2 + segLen;
+            pos += segLen;
         }
-        return 0;
+        return jfifDpm;
     }
 
     // ---- PNG (89 50 4E 47) ----
@@ -339,40 +399,7 @@ static unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
     // ---- TIFF (49 49 2A 00 / 4D 4D 00 2A) ----
     if ((data[0]==0x49 && data[1]==0x49 && data[2]==0x2A && data[3]==0x00) ||
         (data[0]==0x4D && data[1]==0x4D && data[2]==0x00 && data[3]==0x2A)) {
-        bool le = (data[0] == 0x49);
-        auto u16 = [&](std::size_t o) -> uint16_t {
-            if (o + 2 > sz) return 0;
-            return le ? (data[o] | (uint16_t(data[o+1]) << 8))
-                      : ((uint16_t(data[o]) << 8) | data[o+1]);
-        };
-        auto u32 = [&](std::size_t o) -> uint32_t {
-            if (o + 4 > sz) return 0;
-            return le ? (data[o] | (uint32_t(data[o+1]) << 8) |
-                         (uint32_t(data[o+2]) << 16) | (uint32_t(data[o+3]) << 24))
-                      : ((uint32_t(data[o]) << 24) | (uint32_t(data[o+1]) << 16) |
-                         (uint32_t(data[o+2]) << 8) | data[o+3]);
-        };
-        std::size_t ifdOff = u32(4);
-        if (ifdOff + 2 > sz) return 0;
-        uint16_t nEntries = u16(ifdOff);
-        double xRes = 0.0; uint16_t resUnit = 2;
-        for (uint16_t i = 0; i < nEntries; ++i) {
-            std::size_t e = ifdOff + 2 + i * 12;
-            if (e + 12 > sz) break;
-            uint16_t tag  = u16(e);
-            uint16_t type = u16(e + 2);
-            uint32_t voff = u32(e + 8);
-            if (tag == 282 && type == 5) {
-                uint32_t num = u32(voff), den = u32(voff + 4);
-                if (den) xRes = double(num) / den;
-            }
-            if (tag == 296 && type == 3) resUnit = u16(e + 8);
-        }
-        if (xRes > 0.0) {
-            if (resUnit == 2) return unsigned(xRes * 10000.0 / 254.0 + 0.5);
-            if (resUnit == 3) return unsigned(xRes * 100.0 + 0.5);
-        }
-        return 0;
+        return ReadTiffDotsPerMeterX(data, 0, sz);
     }
 
     return 0;
@@ -404,6 +431,9 @@ void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& 
 	}
 
 	cv::Mat inputMat = cv::imdecode(fileBytes, cv::IMREAD_GRAYSCALE);
+	if (inputMat.empty()) {
+		throw std::invalid_argument(std::string("LoadFromFilePath failed to decode file (") + filePath + ")");
+	}
 
 	this->width = static_cast<unsigned int>(inputMat.cols);
 	this->height = static_cast<unsigned int>(inputMat.rows);
