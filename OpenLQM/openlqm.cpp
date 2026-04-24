@@ -32,6 +32,7 @@
 #include <stack>
 #include <tuple>
 #include <stdio.h>
+#include <cstddef>
 #include <cstdint>
 #include <sstream>
 #include <iostream>
@@ -239,17 +240,19 @@ namespace OpenLQM {
 
 OpenLQM::Core::GlobalInitializer globalInit;
 
-static unsigned int ConvertDpiToDotsPerMeter(double dpi)
+namespace {
+
+unsigned int ConvertDpiToDotsPerMeter(double dpi)
 {
-	return static_cast<unsigned int>(dpi * 10000.0 / 254.0 + 0.5);
+	return static_cast<unsigned int>(std::lround((dpi * 10000.0) / 254.0));
 }
 
-static unsigned int ConvertDpcmToDotsPerMeter(double dpcm)
+unsigned int ConvertDpcmToDotsPerMeter(double dpcm)
 {
-	return static_cast<unsigned int>(dpcm * 100.0 + 0.5);
+	return static_cast<unsigned int>(std::lround(dpcm * 100.0));
 }
 
-static unsigned int ReadTiffDotsPerMeterX(const std::vector<unsigned char>& data, std::size_t tiffBase, std::size_t tiffEnd)
+unsigned int ReadTiffDotsPerMeterX(const std::vector<unsigned char>& data, std::size_t tiffBase, std::size_t tiffEnd)
 {
 	if (tiffEnd > data.size() || tiffBase + 8 > tiffEnd) {
 		return 0;
@@ -266,50 +269,55 @@ static unsigned int ReadTiffDotsPerMeterX(const std::vector<unsigned char>& data
 
 	auto u16 = [&](std::size_t o) -> uint16_t {
 		if (o + 2 > tiffEnd) return 0;
-		return le ? (data[o] | (uint16_t(data[o+1]) << 8))
-				  : ((uint16_t(data[o]) << 8) | data[o+1]);
+		return le ? static_cast<uint16_t>(data[o] | (static_cast<uint16_t>(data[o+1]) << 8))
+		          : static_cast<uint16_t>((static_cast<uint16_t>(data[o]) << 8) | data[o+1]);
 	};
 	auto u32 = [&](std::size_t o) -> uint32_t {
 		if (o + 4 > tiffEnd) return 0;
-		return le ? (data[o] | (uint32_t(data[o+1]) << 8) |
-					 (uint32_t(data[o+2]) << 16) | (uint32_t(data[o+3]) << 24))
-				  : ((uint32_t(data[o]) << 24) | (uint32_t(data[o+1]) << 16) |
-					 (uint32_t(data[o+2]) << 8) | data[o+3]);
+		return le ? (static_cast<uint32_t>(data[o]) |
+		             (static_cast<uint32_t>(data[o+1]) << 8) |
+		             (static_cast<uint32_t>(data[o+2]) << 16) |
+		             (static_cast<uint32_t>(data[o+3]) << 24))
+		          : ((static_cast<uint32_t>(data[o])   << 24) |
+		             (static_cast<uint32_t>(data[o+1]) << 16) |
+		             (static_cast<uint32_t>(data[o+2]) << 8)  |
+		              static_cast<uint32_t>(data[o+3]));
 	};
 
 	if (u16(tiffBase + 2) != 42) {
 		return 0;
 	}
 
-	uint32_t ifdRelOffset = u32(tiffBase + 4);
+	const uint32_t ifdRelOffset = u32(tiffBase + 4);
 	if (ifdRelOffset > tiffEnd - tiffBase) {
 		return 0;
 	}
-	std::size_t ifdOff = tiffBase + ifdRelOffset;
+	const std::size_t ifdOff = tiffBase + ifdRelOffset;
 	if (ifdOff + 2 > tiffEnd) {
 		return 0;
 	}
 
-	uint16_t nEntries = u16(ifdOff);
+	const uint16_t nEntries = u16(ifdOff);
 	double xRes = 0.0;
 	uint16_t resUnit = 2;
 	for (uint16_t i = 0; i < nEntries; ++i) {
-		std::size_t e = ifdOff + 2 + i * 12;
+		const std::size_t e = ifdOff + 2 + (static_cast<std::size_t>(i) * 12);
 		if (e + 12 > tiffEnd) break;
-		uint16_t tag  = u16(e);
-		uint16_t type = u16(e + 2);
-		uint32_t count = u32(e + 4);
-		uint32_t valueOrOffset = u32(e + 8);
+		const uint16_t tag  = u16(e);
+		const uint16_t type = u16(e + 2);
+		const uint32_t count = u32(e + 4);
+		const uint32_t valueOrOffset = u32(e + 8);
 		if (tag == 282 && type == 5 && count > 0) { // XResolution RATIONAL
 			if (valueOrOffset > tiffEnd - tiffBase) {
 				continue;
 			}
-			std::size_t roff = tiffBase + valueOrOffset;
+			const std::size_t roff = tiffBase + valueOrOffset;
 			if (roff + 8 > tiffEnd) {
 				continue;
 			}
-			uint32_t num = u32(roff), den = u32(roff + 4);
-			if (den) xRes = double(num) / den;
+			const uint32_t num = u32(roff);
+			const uint32_t den = u32(roff + 4);
+			if (den) xRes = static_cast<double>(num) / den;
 		}
 		if (tag == 296 && type == 3 && count > 0) {
 			resUnit = u16(e + 8);
@@ -323,95 +331,107 @@ static unsigned int ReadTiffDotsPerMeterX(const std::vector<unsigned char>& data
 	return 0;
 }
 
-static unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
+unsigned int ReadDotsPerMeterX(const std::vector<unsigned char>& data)
 {
-    const std::size_t sz = data.size();
-    if (sz < 8) return 0;
+	const std::size_t sz = data.size();
+	if (sz < 8) return 0;
 
-    // ---- JPEG (FF D8) ----
-    if (data[0] == 0xFF && data[1] == 0xD8) {
-        std::size_t pos = 2;
-        unsigned int jfifDpm = 0;
-        while (pos < sz) {
-            if (data[pos] != 0xFF) break;
-            while (pos < sz && data[pos] == 0xFF) {
-                ++pos;
-            }
-            if (pos >= sz) break;
-            uint8_t marker = data[pos++];
-            if (marker == 0xD9 || marker == 0xDA) break; // EOI / SOS
-            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
-            if (pos + 2 > sz) break;
-            uint16_t segLen = (static_cast<uint16_t>(data[pos]) << 8) | data[pos + 1];
-            if (segLen < 2 || pos + segLen > sz) break;
-            std::size_t segmentStart = pos + 2;
-            std::size_t segmentEnd = pos + segLen;
+	// ---- JPEG (FF D8) ----
+	if (data[0] == 0xFF && data[1] == 0xD8) {
+		std::size_t pos = 2;
+		unsigned int jfifDpm = 0;
+		while (pos < sz) {
+			if (data[pos] != 0xFF) break;
+			while (pos < sz && data[pos] == 0xFF) {
+				++pos;
+			}
+			if (pos >= sz) break;
+			const uint8_t marker = data[pos++];
+			if (marker == 0xD9 || marker == 0xDA) break; // EOI / SOS
+			if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+			if (pos + 2 > sz) break;
+			const auto segLen = static_cast<uint16_t>(
+				(static_cast<uint16_t>(data[pos]) << 8) | data[pos + 1]);
+			if (segLen < 2 || pos + segLen > sz) break;
+			const std::size_t segmentStart = pos + 2;
+			const std::size_t segmentEnd = pos + segLen;
 
-            if (marker == 0xE0 && segmentStart + 14 <= segmentEnd &&
-                data[segmentStart]=='J' && data[segmentStart+1]=='F' && data[segmentStart+2]=='I' &&
-                data[segmentStart+3]=='F' && data[segmentStart+4]==0) {
-                uint8_t units = data[segmentStart + 7];
-                uint16_t xd = (static_cast<uint16_t>(data[segmentStart + 8]) << 8) | data[segmentStart + 9];
-                if (xd > 0) {
-                    if (units == 1) jfifDpm = ConvertDpiToDotsPerMeter(xd);
-                    if (units == 2) jfifDpm = ConvertDpcmToDotsPerMeter(xd);
-                }
-            }
-            if (marker == 0xE1 && segmentStart + 14 <= segmentEnd &&
-                data[segmentStart]=='E' && data[segmentStart+1]=='x' && data[segmentStart+2]=='i' &&
-                data[segmentStart+3]=='f' && data[segmentStart+4]==0 && data[segmentStart+5]==0) {
-                unsigned int exifDpm = ReadTiffDotsPerMeterX(data, segmentStart + 6, segmentEnd);
-                if (exifDpm > 0) return exifDpm;
-            }
-            pos += segLen;
-        }
-        return jfifDpm;
-    }
+			if (marker == 0xE0 && segmentStart + 14 <= segmentEnd &&
+			    data[segmentStart]=='J' && data[segmentStart+1]=='F' && data[segmentStart+2]=='I' &&
+			    data[segmentStart+3]=='F' && data[segmentStart+4]==0) {
+				const uint8_t units = data[segmentStart + 7];
+				const auto xd = static_cast<uint16_t>(
+					(static_cast<uint16_t>(data[segmentStart + 8]) << 8) | data[segmentStart + 9]);
+				if (xd > 0) {
+					if (units == 1) jfifDpm = ConvertDpiToDotsPerMeter(xd);
+					if (units == 2) jfifDpm = ConvertDpcmToDotsPerMeter(xd);
+				}
+			}
+			if (marker == 0xE1 && segmentStart + 14 <= segmentEnd &&
+			    data[segmentStart]=='E' && data[segmentStart+1]=='x' && data[segmentStart+2]=='i' &&
+			    data[segmentStart+3]=='f' && data[segmentStart+4]==0 && data[segmentStart+5]==0) {
+				const unsigned int exifDpm = ReadTiffDotsPerMeterX(data, segmentStart + 6, segmentEnd);
+				if (exifDpm > 0) return exifDpm;
+			}
+			pos += segLen;
+		}
+		return jfifDpm;
+	}
 
-    // ---- PNG (89 50 4E 47) ----
-    if (data[0]==0x89 && data[1]==0x50 && data[2]==0x4E && data[3]==0x47) {
-        std::size_t pos = 8;
-        while (pos + 12 <= sz) {
-            uint32_t chunkLen = (uint32_t(data[pos])<<24) | (uint32_t(data[pos+1])<<16) |
-                                (uint32_t(data[pos+2])<<8) | data[pos+3];
-            if (pos + 12 + chunkLen > sz) break;
-            if (data[pos+4]=='p' && data[pos+5]=='H' && data[pos+6]=='Y' && data[pos+7]=='s'
-                && chunkLen == 9) {
-                uint32_t xdpm = (uint32_t(data[pos+8])<<24) | (uint32_t(data[pos+9])<<16) |
-                                (uint32_t(data[pos+10])<<8) | data[pos+11];
-                uint8_t unit = data[pos + 16];
-                if (unit == 1) return xdpm;
-            }
-            if (data[pos+4]=='I' && data[pos+5]=='D' && data[pos+6]=='A' && data[pos+7]=='T') break;
-            pos += 12 + chunkLen;
-        }
-        return 0;
-    }
+	// ---- PNG (89 50 4E 47) ----
+	if (data[0]==0x89 && data[1]==0x50 && data[2]==0x4E && data[3]==0x47) {
+		std::size_t pos = 8;
+		while (pos + 12 <= sz) {
+			const uint32_t chunkLen = (static_cast<uint32_t>(data[pos])   << 24) |
+			                          (static_cast<uint32_t>(data[pos+1]) << 16) |
+			                          (static_cast<uint32_t>(data[pos+2]) << 8)  |
+			                           static_cast<uint32_t>(data[pos+3]);
+			if (pos + 12 + chunkLen > sz) break;
+			if (data[pos+4]=='p' && data[pos+5]=='H' && data[pos+6]=='Y' && data[pos+7]=='s'
+			    && chunkLen == 9) {
+				const uint32_t xdpm = (static_cast<uint32_t>(data[pos+8])  << 24) |
+				                      (static_cast<uint32_t>(data[pos+9])  << 16) |
+				                      (static_cast<uint32_t>(data[pos+10]) << 8)  |
+				                       static_cast<uint32_t>(data[pos+11]);
+				const uint8_t unit = data[pos + 16];
+				if (unit == 1) return xdpm;
+			}
+			if (data[pos+4]=='I' && data[pos+5]=='D' && data[pos+6]=='A' && data[pos+7]=='T') break;
+			pos += 12 + chunkLen;
+		}
+		return 0;
+	}
 
-    // ---- BMP (42 4D) ----
-    if (data[0] == 0x42 && data[1] == 0x4D) {
-        if (sz < 42) return 0;
-        // The biXPelsPerMeter field only exists in BITMAPINFOHEADER (40 B)
-        // and later headers (V2=52, V3=56, V4=108, V5=124). The legacy
-        // BITMAPCOREHEADER is 12 B and has no DPI fields at all — bytes
-        // 38..41 there belong to pixel data and must not be interpreted
-        // as DPI.
-        uint32_t dibSize = uint32_t(data[14]) | (uint32_t(data[15]) << 8) |
-                           (uint32_t(data[16]) << 16) | (uint32_t(data[17]) << 24);
-        if (dibSize < 40) return 0;
-        int32_t xppm = int32_t(data[38]) | (int32_t(data[39]) << 8) |
-                       (int32_t(data[40]) << 16) | (int32_t(data[41]) << 24);
-        return xppm > 0 ? static_cast<unsigned int>(xppm) : 0;
-    }
+	// ---- BMP (42 4D) ----
+	if (data[0] == 0x42 && data[1] == 0x4D) {
+		if (sz < 42) return 0;
+		// The biXPelsPerMeter field only exists in BITMAPINFOHEADER (40 B)
+		// and later headers (V2=52, V3=56, V4=108, V5=124). The legacy
+		// BITMAPCOREHEADER is 12 B and has no DPI fields at all — bytes
+		// 38..41 there belong to pixel data and must not be interpreted
+		// as DPI.
+		const uint32_t dibSize = static_cast<uint32_t>(data[14]) |
+		                         (static_cast<uint32_t>(data[15]) << 8)  |
+		                         (static_cast<uint32_t>(data[16]) << 16) |
+		                         (static_cast<uint32_t>(data[17]) << 24);
+		if (dibSize < 40) return 0;
+		const int32_t xppm = static_cast<int32_t>(data[38]) |
+		                     (static_cast<int32_t>(data[39]) << 8)  |
+		                     (static_cast<int32_t>(data[40]) << 16) |
+		                     (static_cast<int32_t>(data[41]) << 24);
+		return xppm > 0 ? static_cast<unsigned int>(xppm) : 0;
+	}
 
-    // ---- TIFF (49 49 2A 00 / 4D 4D 00 2A) ----
-    if ((data[0]==0x49 && data[1]==0x49 && data[2]==0x2A && data[3]==0x00) ||
-        (data[0]==0x4D && data[1]==0x4D && data[2]==0x00 && data[3]==0x2A)) {
-        return ReadTiffDotsPerMeterX(data, 0, sz);
-    }
+	// ---- TIFF (49 49 2A 00 / 4D 4D 00 2A) ----
+	if ((data[0]==0x49 && data[1]==0x49 && data[2]==0x2A && data[3]==0x00) ||
+	    (data[0]==0x4D && data[1]==0x4D && data[2]==0x00 && data[3]==0x2A)) {
+		return ReadTiffDotsPerMeterX(data, 0, sz);
+	}
 
-    return 0;
+	return 0;
 }
+
+} // namespace
 
 void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& filePath, OpenLQM::PixelDensity resolutionOverride) {
 	FILE* pFile = fopen(filePath.c_str(), "rb");
@@ -429,7 +449,7 @@ void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& 
 			fileBytes[i + lastSize] = static_cast<unsigned char>(buf[i]);
 		}
 	}
-	unsigned int dpmX = ReadDotsPerMeterX(fileBytes);
+	const unsigned int dpmX = ReadDotsPerMeterX(fileBytes);
 	const float INCHES_PER_METER = 39.3701f;
 	fclose(pFile);
 	float ppiF = OpenLQM::Core::ClampResolution(dpmX / INCHES_PER_METER);
