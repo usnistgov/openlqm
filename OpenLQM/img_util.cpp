@@ -2389,6 +2389,9 @@ namespace OpenLQM {
             normBB.width = newWidth;
             normBB.height = newHeight;
             normBB.resolution = OpenLQM::PixelDensity::ppi500;
+            /* FIXME: https://github.com/usnistgov/openlqm/issues/7 */
+            if (img.bitDepth != PixelBitDepth::depth8 || img.bitsPerPixel != 8)
+                throw std::runtime_error{"Unsupported bit depth"};
             normBB.bitDepth = img.bitDepth;
             normBB.bitsPerPixel = img.bitsPerPixel;
 
