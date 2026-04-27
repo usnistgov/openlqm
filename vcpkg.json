@@ -1,6 +1,5 @@
 {
   "dependencies": [
-    "freeimage",
     "opencv4"
   ],
   "overrides": [
