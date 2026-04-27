@@ -106,7 +106,7 @@ namespace OpenLQM {
 		 * @brief Set image region of interest
 		 * @param coordinates List of coordinates defining a convex polygon
 		 */
-		void SetRoi(const std::vector<Coordinate>& coordinates);
+		void OPENLQM_API_DECL SetRoi(const std::vector<Coordinate>& coordinates);
 	};
 
 	/**

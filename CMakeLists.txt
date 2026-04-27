@@ -28,15 +28,6 @@ option(STATICALLY_LINK_EXECUTABLE "Link C++ runtime statically to the OpenLQM ex
 
 option(PROFILE_RELEASE_BUILD OFF)
 
-# Default install location
-# if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-#todo: cmake with the ninja generator can't handle spaces in paths on linux, so overriding this for now
-if(NOT INSTALL_PREFIX_OVERRIDE)
-	get_filename_component(output_directory_name "${CMAKE_BINARY_DIR}" NAME)
-	set(INSTALL_PREFIX_OVERRIDE ${PROJECT_SOURCE_DIR}/out/install/${output_directory_name} CACHE PATH "CMake with the Ninja generator has an issue on linux with project paths containing spaces (no issue on Windows), resulting in a malformed CMAKE_INSTALL_PREFIX being set automatically. This override is a temporary workaround.")
-endif()
-set(CMAKE_INSTALL_PREFIX ${INSTALL_PREFIX_OVERRIDE} CACHE PATH "Install directory used by install(). OpenLQM defaults this to a project-local directory instead of the usual system directory" FORCE)
-
 if(STATICALLY_LINK_LIBRARY)
 	set(OpenCV_STATIC ON)
 endif()

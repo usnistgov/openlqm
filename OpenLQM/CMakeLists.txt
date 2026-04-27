@@ -17,7 +17,7 @@
 # Investigation's Criminal Justice Information Services Division in 2012-2014.
 
 cmake_minimum_required(VERSION 3.30)
-project("OpenLQM" VERSION 1.0.0 LANGUAGES CXX)
+project("OpenLQM" VERSION 1.0.1 LANGUAGES CXX)
 include(openlqm_cmake_utils/init.cmake)
 
 # Search file at FILE_PATH for a variable definition like "<VAR_NAME>=xxx" and define that variable in the caller's scope
@@ -50,8 +50,6 @@ string(REPLACE "," ";" OPENCV_REQUIRED_COMPONENT_TARGETS "${OPENCV_REQUIRED_COMP
 
 message(STATUS "VCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}")
 find_package(OpenCV ${MINIMUM_OPENCV_VERSION} REQUIRED COMPONENTS ${OPENCV_REQUIRED_COMPONENTS})
-string(TOUPPER ${CMAKE_BUILD_TYPE} build_type_all_caps)
-set(IMPORTED_LOCATION_CONFIG_VAR "IMPORTED_LOCATION_${build_type_all_caps}")
 
 # Project-specific convenience variables
 set(openlqm_include_dir ${PROJECT_SOURCE_DIR}/include)
@@ -262,7 +260,7 @@ endif()
 
 set(CPACK_PACKAGE_NAME OpenLQM)
 set(CPACK_PACKAGE_VENDOR NIST)
-set(CPACK_PACKAGE_VERSION 1.0.0)
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_CONTACT OpenLQM@list.nist.gov)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenLQM - A C++ library and CLI for fingerprint analysis")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://fingerprint.nist.gov/openlqm")

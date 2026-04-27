@@ -412,6 +412,8 @@ namespace OpenLQM {
 			std::vector<cv::Vec4i> hierarchy;
 
 			cv::findContours( maskMap, contourPoints, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE, cv::Point(0, 0));
+			if (contourPoints.empty())
+			        return;
 
 			//Find the largest contour
 			int maxContourSizeIndex = 0;

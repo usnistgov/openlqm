@@ -102,8 +102,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	)
 endif()
 
-# Set default symbol visibility to hidden for GCC/Clang
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+# Set default symbol visibility to hidden for GCC/Clang/AppleClang
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 	set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 	set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
 endif()

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 #include <utility>
 
@@ -319,7 +320,7 @@ namespace OpenLQM {
          std::vector<double> cosLut;
          std::vector<double> sinLut;
 
-         Dir2Rad(int ndirs_);
+         explicit Dir2Rad(int ndirs_);
       };
 
       /* DFT wave form structure containing both cosine and   */
@@ -393,7 +394,7 @@ namespace OpenLQM {
 
          }
 
-         Contour(int size)
+         explicit Contour(int size)
          {
             Reserve(size);
          }

@@ -2389,10 +2389,21 @@ namespace OpenLQM {
             normBB.width = newWidth;
             normBB.height = newHeight;
             normBB.resolution = OpenLQM::PixelDensity::ppi500;
+            /* FIXME: https://github.com/usnistgov/openlqm/issues/7 */
+            if (img.bitDepth != PixelBitDepth::depth8 || img.bitsPerPixel != 8)
+                throw std::runtime_error{"Unsupported bit depth"};
+            normBB.bitDepth = img.bitDepth;
+            normBB.bitsPerPixel = img.bitsPerPixel;
 
             normBB.buffer.resize(newSize);
             if (resFactor == 1) {
-                memcpy(normBB.buffer.data(), img.buffer.data(), newSize);
+                for (unsigned int y = 0; y < normBB.height; ++y) {
+                    const unsigned char* srcRow =
+                        img.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(img.width));
+                    unsigned char* dstRow =
+                        normBB.buffer.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(newWidth));
+                    memcpy(dstRow, srcRow, newWidth);
+                }
             } else {
                 for (unsigned int y = 0; y < normBB.height; ++y) {
                     for (unsigned int x = 0; x < normBB.width; ++x) {

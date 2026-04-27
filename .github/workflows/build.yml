@@ -1,0 +1,91 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'
+      - '!.github/workflows/build.yml'
+      - '.gitignore'
+      - 'LICENSE.txt'
+      - 'NOTICE.txt'
+      - 'OpenLQM/openlqm.1'
+      - 'README.md'
+
+jobs:
+  build:
+    name: Build
+
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { os: macos-26 }
+          - { os: ubuntu-24.04 }
+          - { os: windows-2025 }
+
+    steps:
+
+    - name: Configure vcpkg cache variables
+      shell: bash
+      run: |
+        mkdir -p "${VCPKG_INSTALLATION_ROOT}/downloads"
+        mkdir -p "${VCPKG_INSTALLATION_ROOT}/bincache"
+        echo "VCPKG_DOWNLOADS=${VCPKG_INSTALLATION_ROOT}/downloads" >> ${GITHUB_ENV}
+        echo "VCPKG_DEFAULT_BINARY_CACHE=${VCPKG_INSTALLATION_ROOT}/bincache" >> ${GITHUB_ENV}
+
+    - name: Configure vcpkg cache
+      uses: actions/cache@v5
+      id: vcpkg-cache
+      with:
+        path: |
+          ${{ env.VCPKG_DOWNLOADS }}
+          ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+        key: ${{ matrix.config.os }}-vcpkg-cache
+
+    - name: Install Ubuntu Packages
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        sudo apt -y install autoconf autoconf-archive automake libtool \
+        libx11-dev libxft-dev libxext-dev libltdl-dev libxi-dev libxtst-dev \
+        libxrandr-dev
+
+    - name: Checkout Code
+      uses: actions/checkout@v6
+
+    - name: Make Build Directory
+      run: cmake -E make_directory ${{ github.workspace }}/build
+
+    - name: Configure CMake (Single-config Generator)
+      if: ${{ runner.os != 'Windows' }}
+      working-directory: ${{ github.workspace }}/build
+      run: |
+        cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" \
+        ${GITHUB_WORKSPACE}
+
+    - name: Configure CMake (Multi-config Generator)
+      if: ${{ runner.os == 'Windows' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}\build
+      run: |
+        cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CONFIGURATION_TYPES=Release \
+        -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" \
+        ${GITHUB_WORKSPACE}
+
+    - name: Build (Single-config Generator)
+      if: ${{ runner.os != 'Windows' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/build
+      run: cmake --build .
+
+    - name: Build (Multi-config Generator)
+      if: ${{ runner.os == 'Windows' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}\build
+      run: cmake --build . --config Release

@@ -4586,12 +4586,7 @@ namespace OpenLQM {
                 if (minutia1.x == minutia2.x && minutia1.y == minutia2.y) {
                     /* Remove the 1st minutia from the minutiae list. */
                     minutiae.erase(minutiae.begin() + i - 1);
-
-                    /* Minutia i - 2 slid into position i - 1, so don't decrement 'i'. */
-                    /* Compare the last minutia with the minutia newly at i - 1        */
-                    continue;
                 }
-                /* Otherwise, minutia pair is different ... */
 
                 /* Decrement to compare next minutia pair in list. */
                 --i;

@@ -230,7 +230,7 @@ namespace OpenLQM {
 		}
 
 		template<class T>
-		void CopyVectorToFeatureMap(const std::vector<T> vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
+		void CopyVectorToFeatureMap(const std::vector<T>& vec, unsigned int width, unsigned int height, OpenLQM::FeatureMapBase<T>& featureMap) {
 			featureMap.width = width;
 			featureMap.height = height;
 			featureMap.buffer = vec;
@@ -479,11 +479,31 @@ void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& 
 	} else {
 		throw std::invalid_argument(std::string("Invalid input resolution (") + std::to_string(ppi) + "). Must be approximately 500, 1000, 2000, or 4000 pixels per inch");
 	}
-	this->buffer.resize(this->width * this->height);
-	memcpy(this->buffer.data(), inputMat.data, this->buffer.size());
 
-	this->bitDepth = PixelBitDepth::depth8;
-	this->bitsPerPixel = 8;
+	switch (inputMat.depth()) {
+	case CV_8U:
+		this->bitDepth = PixelBitDepth::depth8;
+		break;
+	case CV_16U:
+		this->bitDepth = PixelBitDepth::depth16;
+		break;
+	default:
+		throw std::runtime_error{"Unsupported image depth (inputMat."
+		    "depth == " + std::to_string(inputMat.depth()) + ")"};
+	}
+	if (inputMat.channels() <= 0)
+		throw std::runtime_error{"Unexpected number of channels: " +
+		    std::to_string(inputMat.channels())};
+	this->bitsPerPixel = inputMat.elemSize1() *
+	    static_cast<size_t>(inputMat.channels()) * 8;
+
+	this->buffer.resize(this->width * this->height *
+	    (this->bitsPerPixel / 8));
+	if ((inputMat.total() * inputMat.elemSize()) != this->buffer.size())
+		throw std::runtime_error{"Unexpected buffer size mismatch (" +
+		    std::to_string(inputMat.total() * inputMat.elemSize()) +
+		    ", " + std::to_string(this->buffer.size()) + ")"};
+	memcpy(this->buffer.data(), inputMat.data, this->buffer.size());
 }
 
 void OpenLQM::Fingerprint::SetRoi(const std::vector<OpenLQM::Coordinate>& coordinates) {
@@ -1006,9 +1026,6 @@ double OpenLQM::Core::CalculateLQMetric12(double predictedMatchScore) {
 		return (predictedMatchScore * 0.00001147078) + 0.024901025;
 	}
 	else if (predictedMatchScore >= 2849.35331665492) {
-		return (predictedMatchScore * 0.00003396047) + -0.096765369;
-	}
-	else if (predictedMatchScore >= 2849.35331665492 && predictedMatchScore < 5409.8752849724) {
 		return (predictedMatchScore * 0.00003396047) + -0.096765369;
 	}
 	else {
