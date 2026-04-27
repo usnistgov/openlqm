@@ -53,9 +53,17 @@ cd openlqm
 mkdir build
 cd build
 
-# Build and package
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" # Windows, add: -DCMAKE_CONFIGURATION_TYPES=Release
-cmake --build . # Windows, add --config Release
+# Config + vcpkg installation (single-config generator: gcc/clang)
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+# Config + vcpkg installation (Multi-config generator: Visual Studio, Xcode)
+cmake .. -DCMAKE_CONFIGURATION_TYPES=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+
+# Build (single-config generator)
+cmake --build .
+# Build (multi-config generator)
+cmake --build . --config Release
+
+# Package
 cpack
 ```
 
