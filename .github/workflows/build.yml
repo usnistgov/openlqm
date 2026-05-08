@@ -12,6 +12,19 @@ on:
       - 'NOTICE.txt'
       - 'OpenLQM/openlqm.1'
       - 'README.md'
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+      - '!.github/workflows/build.yml'
+      - '.gitignore'
+      - 'LICENSE.txt'
+      - 'NOTICE.txt'
+      - 'OpenLQM/openlqm.1'
+      - 'README.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -73,7 +86,6 @@ jobs:
       working-directory: ${{ github.workspace }}\build
       run: |
         cmake \
-        -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CONFIGURATION_TYPES=Release \
         -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" \
         ${GITHUB_WORKSPACE}
@@ -82,10 +94,10 @@ jobs:
       if: ${{ runner.os != 'Windows' }}
       shell: bash
       working-directory: ${{ github.workspace }}/build
-      run: cmake --build .
+      run: cmake --build . --parallel
 
     - name: Build (Multi-config Generator)
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       working-directory: ${{ github.workspace }}\build
-      run: cmake --build . --config Release
+      run: cmake --build . --config Release --parallel
