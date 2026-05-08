@@ -25,7 +25,7 @@ Build Dependencies
 
 Building OpenLQM requires the following dependencies:
 
- * [FreeImage](https://freeimage.sourceforge.io) ([FreeImage Public License](https://freeimage.sourceforge.io/freeimage-license.txt))
+ * [libjpeg-turbo](https://libjpeg-turbo.org), [libpng](http://libpng.org/pub/png/libpng.html), and [libtiff](http://www.simplesystems.org/libtiff/) (same families OpenCV uses for decoding; linked explicitly for embedded DPI metadata)
  * [OpenCV](https://github.com/opencv/opencv) ([Apache 2 License](https://github.com/opencv/opencv/blob/master/LICENSE))
 
 We use vcpkg to gather and build these packages, including their dependencies.

@@ -29,10 +29,11 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/utils/logger.hpp>
 
+#include "image_resolution.hpp"
+
 #include <stack>
 #include <tuple>
 #include <stdio.h>
-#include <FreeImage.h>
 #include <sstream>
 #include <iostream>
 #include <string>
@@ -115,7 +116,6 @@ namespace OpenLQM {
 		struct GlobalInitializer {
 			GlobalInitializer() {
 				cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
-				FreeImage_Initialise();
 			}
 		};
 
@@ -245,7 +245,6 @@ void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& 
 	if (!pFile) {
 		throw std::invalid_argument(std::string("Failed to open {") + filePath + "}");
 	}
-	int flags = 0;
 	std::vector<unsigned char> fileBytes;
 	char buf[2049];
 	buf[2048] = 0;
@@ -257,30 +256,26 @@ void OPENLQM_API_IMPL OpenLQM::Fingerprint::LoadFromFilePath(const std::string& 
 			fileBytes[i + lastSize] = static_cast<unsigned char>(buf[i]);
 		}
 	}
-	FIMEMORY* pMem = FreeImage_OpenMemory(fileBytes.data(), static_cast<unsigned long>(fileBytes.size()));
-	FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeFromMemory(pMem, static_cast<int>(fileBytes.size()));
-
-	FIBITMAP* pBitmap = FreeImage_LoadFromMemory(fif, pMem, flags);
-	if (!pBitmap) {
-		FreeImage_CloseMemory(pMem);
-		fclose(pFile);
-		throw std::invalid_argument(std::string("LoadFromFilePath failed to decode file (") + filePath + ")");
-	}
-	unsigned int dpmX = FreeImage_GetDotsPerMeterX(pBitmap);
-	const float INCHES_PER_METER = 39.3701f;
-	FreeImage_CloseMemory(pMem);
-	FreeImage_Unload(pBitmap);
 	fclose(pFile);
-	float ppiF = OpenLQM::Core::ClampResolution(dpmX / INCHES_PER_METER);
+
+	const unsigned int dpmX = OpenLQM::Detail::ReadDotsPerMeterX(fileBytes.data(), fileBytes.size());
+	const float INCHES_PER_METER = 39.3701f;
+	float ppiF = OpenLQM::Core::ClampResolution(static_cast<float>(dpmX) / INCHES_PER_METER);
 	int ppi = std::lrint(ppiF);
 	if (resolutionOverride != OpenLQM::PixelDensity::ppiInvalid) {
 		ppi = static_cast<int>(static_cast<unsigned int>(resolutionOverride));
 	}
 
 	cv::Mat inputMat = cv::imdecode(fileBytes, cv::IMREAD_GRAYSCALE);
+	if (inputMat.empty()) {
+		throw std::invalid_argument(std::string("LoadFromFilePath failed to decode file (") + filePath + ")");
+	}
 
 	this->width = static_cast<unsigned int>(inputMat.cols);
 	this->height = static_cast<unsigned int>(inputMat.rows);
+	if (this->width == 0 || this->height == 0) {
+		throw std::invalid_argument(std::string("LoadFromFilePath failed to decode file (") + filePath + ")");
+	}
 	if (ppi == 500) {
 		this->resolution = OpenLQM::PixelDensity::ppi500;
 	}

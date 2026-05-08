@@ -1,7 +1,9 @@
 {
   "dependencies": [
-    "freeimage",
-    "opencv4"
+    "libjpeg-turbo",
+    "libpng",
+    "opencv4",
+    "tiff"
   ],
   "overrides": [
     {
